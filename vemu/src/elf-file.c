@@ -1,5 +1,6 @@
 #include "elf-file.h"
-#include "assert.h"
+#include <stdlib.h>
+#include <assert.h>
 
 bool vemu_read_elf_header(FILE *file, vemu_elf_header_t *elf) {
     size_t size = fread(elf, 1, sizeof(vemu_elf_header_t), file);
@@ -70,4 +71,24 @@ bool vemu_read_section_header(FILE *file, vemu_elf_header_t *elf,
     }
     
     return true;                                                
+}
+
+uint8_t *vemu_load_section_content(FILE *file, vemu_elf_section_header_t *sh) {
+    if (sh->sh_size == 0) {
+        return NULL;
+    }
+
+    uint8_t *data = malloc(sh->sh_size);
+    if (data == NULL) {
+        return NULL;
+    }
+
+    fseek(file, sh->sh_offset, SEEK_SET);
+
+    size_t size = fread(data, 1, sh->sh_size, file);
+    if (size < sh->sh_size) {
+        return NULL;
+    }
+
+    return data;
 }

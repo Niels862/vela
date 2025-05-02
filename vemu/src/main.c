@@ -63,6 +63,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    fprintf(stderr, "entry point at %d\n", elf.e_entry);
+
     fprintf(stderr, "found %d program headers...\n", elf.e_phnum);
     for (size_t i = 0; i < elf.e_phnum; i++) {
         vemu_elf_program_header_t ph;
@@ -72,17 +74,33 @@ int main(int argc, char **argv) {
 
         fprintf(stderr, "%ld: %x at %d: size %d, %d in mem\n", 
                 i, ph.p_type, ph.p_vaddr, ph.p_filesz, ph.p_memsz);
+
+        if (ph.p_type == ELF_PT_LOAD) {
+            fprintf(stderr, "should be loaded\n");
+        }
     }
 
-    fprintf(stderr, "found %d section headers...\n", elf.e_phnum);
-    for (size_t i = 0; i < elf.e_phnum; i++) {
+    vemu_elf_section_header_t shstrtab;
+    if (!vemu_read_section_header(file, &elf, &shstrtab, elf.e_shstrndx)) {
+        return 1;
+    }
+
+    uint8_t *strtab = vemu_load_section_content(file, &shstrtab);
+    if (strtab == NULL) {
+        return 1;
+    }
+
+    fprintf(stderr, "found %d section headers...\n", elf.e_shnum);
+    fprintf(stderr, "section name table at %d\n", elf.e_shstrndx);
+    for (size_t i = 0; i < elf.e_shnum; i++) {
         vemu_elf_section_header_t sh;
         if (!vemu_read_section_header(file, &elf, &sh, i)) {
             return 1;
         }
 
-        fprintf(stderr, "%ld: %x at %d: size %d\n", 
-                i, sh.sh_type, sh.sh_addr, sh.sh_size);
+        fprintf(stderr, "%ld '%s': %x at %x: size %d\n", 
+                i, &strtab[sh.sh_name], 
+                sh.sh_type, sh.sh_offset, sh.sh_size);
     }
 
     return 0;

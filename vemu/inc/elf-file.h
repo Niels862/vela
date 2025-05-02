@@ -30,16 +30,16 @@ typedef struct {
     uint16_t    e_shstrndx;
 } vemu_elf_header_t;
 
-#define ELF_MAG0    0x7F
-#define ELF_MAG1    'E'
-#define ELF_MAG2    'L'
-#define ELF_MAG3    'F'
+#define ELF_MAG0        0x7F
+#define ELF_MAG1        'E'
+#define ELF_MAG2        'L'
+#define ELF_MAG3        'F'
 
-#define ELF_CLASS32 1
-#define ELF_LTLENDN 1
-#define ELF_ET_EXEC 2
+#define ELF_CLASS32     1
+#define ELF_LTLENDN     1
+#define ELF_ET_EXEC     2
 
-#define ELF_RISCV   0xF3
+#define ELF_RISCV       0xF3
 
 typedef struct {
     uint32_t    p_type;
@@ -51,6 +51,8 @@ typedef struct {
     uint32_t    p_flags;
     uint32_t    p_align;
 } vemu_elf_program_header_t;
+
+#define ELF_PT_LOAD     1
 
 typedef struct {
     uint32_t sh_name;
@@ -77,4 +79,6 @@ bool vemu_read_section_header(FILE *file, vemu_elf_header_t *elf,
                               vemu_elf_section_header_t *sh,
                               size_t i);
   
+uint8_t *vemu_load_section_content(FILE *file, vemu_elf_section_header_t *sh);
+
 #endif

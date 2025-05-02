@@ -10,3 +10,4 @@ tests:
 
 clean:
 	$(MAKE) -C vemu clean
+	$(MAKE) -C tests clean
