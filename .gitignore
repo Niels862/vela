@@ -1,0 +1,5 @@
+vemu/vemu
+vela/vela
+*.o
+*.d
+*.elf
