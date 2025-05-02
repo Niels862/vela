@@ -67,6 +67,20 @@ typedef struct {
     uint32_t sh_entsize;
 } vemu_elf_section_header_t;
 
+typedef struct {
+    FILE *file;
+    uint8_t *strtab;
+    vemu_elf_header_t h;
+} vemu_elf_t;
+
+void vemu_elf_init(vemu_elf_t *elf);
+
+bool vemu_elf_open(vemu_elf_t *elf, char const *filename);
+
+bool vemu_elf_load(vemu_elf_t *elf, uint8_t *ram);
+
+void emu_elf_destruct(vemu_elf_t *elf);
+
 bool vemu_read_elf_header(FILE *file, vemu_elf_header_t *elf);
 
 bool vemu_validate_elf_header(vemu_elf_header_t *elf);
@@ -74,6 +88,9 @@ bool vemu_validate_elf_header(vemu_elf_header_t *elf);
 bool vemu_read_program_header(FILE *file, vemu_elf_header_t *elf, 
                               vemu_elf_program_header_t *ph,
                               size_t i);
+
+bool vemu_load_program(FILE *file, vemu_elf_program_header_t *ph,
+                       uint8_t *ram);
 
 bool vemu_read_section_header(FILE *file, vemu_elf_header_t *elf, 
                               vemu_elf_section_header_t *sh,

@@ -48,60 +48,33 @@ int main(int argc, char **argv) {
     vemu_args_t args = { 0 };
     argp_parse(&argp, argc, argv, 0, 0, &args);
 
-    FILE *file = fopen(args.filename, "rb");
-    if (file == NULL) {
-        fprintf(stderr, "Could not open file: '%s'\n", args.filename);
+    int res = 0;
+
+    uint8_t *ram = malloc(1024 * 1024 * 1024);
+    if (ram == NULL) {
         return 1;
     }
 
-    vemu_elf_header_t elf;
-    if (!vemu_read_elf_header(file, &elf)) {
-        return 1;
+    vemu_elf_t elf;
+    vemu_elf_init(&elf);
+
+    if (!vemu_elf_open(&elf, args.filename)) {
+        res = 1;
+        goto end;
     }
 
-    if (!vemu_validate_elf_header(&elf)) {
-        return 1;
+    if (!vemu_elf_load(&elf, ram)) {
+        res = 1;
+        goto end;
     }
 
-    fprintf(stderr, "entry point at %d\n", elf.e_entry);
+    uint32_t entry = elf.h.e_entry;
 
-    fprintf(stderr, "found %d program headers...\n", elf.e_phnum);
-    for (size_t i = 0; i < elf.e_phnum; i++) {
-        vemu_elf_program_header_t ph;
-        if (!vemu_read_program_header(file, &elf, &ph, i)) {
-            return 1;
-        }
+    fprintf(stderr, "entry: %x -> %x\n", entry, *((uint32_t*)(ram + entry)));
 
-        fprintf(stderr, "%ld: %x at %d: size %d, %d in mem\n", 
-                i, ph.p_type, ph.p_vaddr, ph.p_filesz, ph.p_memsz);
+end:
+    emu_elf_destruct(&elf);
+    free(ram);
 
-        if (ph.p_type == ELF_PT_LOAD) {
-            fprintf(stderr, "should be loaded\n");
-        }
-    }
-
-    vemu_elf_section_header_t shstrtab;
-    if (!vemu_read_section_header(file, &elf, &shstrtab, elf.e_shstrndx)) {
-        return 1;
-    }
-
-    uint8_t *strtab = vemu_load_section_content(file, &shstrtab);
-    if (strtab == NULL) {
-        return 1;
-    }
-
-    fprintf(stderr, "found %d section headers...\n", elf.e_shnum);
-    fprintf(stderr, "section name table at %d\n", elf.e_shstrndx);
-    for (size_t i = 0; i < elf.e_shnum; i++) {
-        vemu_elf_section_header_t sh;
-        if (!vemu_read_section_header(file, &elf, &sh, i)) {
-            return 1;
-        }
-
-        fprintf(stderr, "%ld '%s': %x at %x: size %d\n", 
-                i, &strtab[sh.sh_name], 
-                sh.sh_type, sh.sh_offset, sh.sh_size);
-    }
-
-    return 0;
+    return res;
 }
