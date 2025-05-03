@@ -57,7 +57,7 @@ bool vemu_elf_load(vemu_elf_t *elf, uint8_t *ram) {
     return true;
 }
 
-void emu_elf_destruct(vemu_elf_t *elf) {
+void vemu_elf_destruct(vemu_elf_t *elf) {
     if (elf->file != NULL) {
         fclose(elf->file);
     }

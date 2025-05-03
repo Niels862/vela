@@ -79,7 +79,7 @@ bool vemu_elf_open(vemu_elf_t *elf, char const *filename);
 
 bool vemu_elf_load(vemu_elf_t *elf, uint8_t *ram);
 
-void emu_elf_destruct(vemu_elf_t *elf);
+void vemu_elf_destruct(vemu_elf_t *elf);
 
 bool vemu_read_elf_header(FILE *file, vemu_elf_header_t *elf);
 

@@ -1,4 +1,5 @@
 #include "elf-file.h"
+#include "system.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <argp.h>
@@ -50,10 +51,15 @@ int main(int argc, char **argv) {
 
     int res = 0;
 
+    vemu_system_t sys;
+    vemu_system_init(&sys);
+
     uint8_t *ram = malloc(1024 * 1024 * 1024);
     if (ram == NULL) {
         return 1;
     }
+
+    vemu_system_add_ram(&sys, ram);
 
     vemu_elf_t elf;
     vemu_elf_init(&elf);
@@ -63,18 +69,16 @@ int main(int argc, char **argv) {
         goto end;
     }
 
-    if (!vemu_elf_load(&elf, ram)) {
+    if (!vemu_elf_load(&elf, sys.ram)) {
         res = 1;
         goto end;
     }
 
-    uint32_t entry = elf.h.e_entry;
-
-    fprintf(stderr, "entry: %x -> %x\n", entry, *((uint32_t*)(ram + entry)));
+    vemu_cpu_run(&sys.cpu, elf.h.e_entry);
 
 end:
-    emu_elf_destruct(&elf);
-    free(ram);
+    vemu_elf_destruct(&elf);
+    vemu_system_destruct(&sys);
 
     return res;
 }
