@@ -5,24 +5,49 @@
 
 #define VEMU_N_REGS         32
 #define VEMU_MAX_OPCODES    128
+#define VEMU_MAX_FUNCT3     8
 
 #define VEMU_IS_COMPRESSED(instr) (((instr) & 0x3) != 0x3)
 
 typedef enum {
-    VEMU_OPCODE_ILLEGAL     = 0x00,
-    VEMU_OPCODE_ADDI        = 0x13,
-    VEMU_OPCODE_LI          = 0x71,
-    VEMU_OPCODE_SW          = 0x70
+    VEMU_OPCODE_ILLEGAL,
+    VEMU_OPCODE_ADDI,
+    VEMU_OPCODE_LI,
+    VEMU_OPCODE_LB,
+    VEMU_OPCODE_LH,
+    VEMU_OPCODE_LW,
+    VEMU_OPCODE_LBU,
+    VEMU_OPCODE_LHU,
+    VEMU_OPCODE_SB,
+    VEMU_OPCODE_SH,
+    VEMU_OPCODE_SW
 } vemu_opcode_t;
 
 typedef enum {
-    VEMU_OPCODE_C_ADDI4SPN,
+    VEMU_FUNCT_LB           = 0x0,
+    VEMU_FUNCT_LH           = 0x1,
+    VEMU_FUNCT_LW           = 0x2,
+    VEMU_FUNCT_LBU          = 0x4,
+    VEMU_FUNCT_LHU          = 0x5,
 
+    VEMU_FUNCT_SB           = 0x0,
+    VEMU_FUNCT_SH           = 0x1,
+    VEMU_FUNCT_SW           = 0x2
+} vemu_funct_t;
+
+typedef enum {
+    VEMU_OPCODE_C_ADDI4SPN,
     VEMU_OPCODE_C_ADDI,
     VEMU_OPCODE_C_LI,
-
     VEMU_OPCODE_C_SWSP,
 } vemu_compressed_opcode_t;
+
+typedef enum {
+    VEMU_OPCODE_R_ADDI      = 0x13,
+    VEMU_OPCODE_R_LI        = 0x71,
+    VEMU_OPCODE_R_L         = 0x03,
+    VEMU_OPCODE_R_S         = 0x23,
+} vemu_regular_opcode_t;
 
 typedef struct {
     uint32_t regs[VEMU_N_REGS];

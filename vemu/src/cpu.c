@@ -40,17 +40,39 @@ static char const * const vemu_reg_names[VEMU_N_REGS] = {
     "t6",
 };
 
-static vemu_opcode_t const vemu_compressed_to_regular[VEMU_MAX_OPCODES] = {
+static vemu_opcode_t const vemu_compressed_to_flat[VEMU_MAX_OPCODES] = {
     [VEMU_OPCODE_C_ADDI4SPN]    = VEMU_OPCODE_ADDI,
     [VEMU_OPCODE_C_ADDI]        = VEMU_OPCODE_ADDI,
     [VEMU_OPCODE_C_LI]          = VEMU_OPCODE_LI,
     [VEMU_OPCODE_C_SWSP]        = VEMU_OPCODE_SW,
 };
 
+static vemu_opcode_t const vemu_lfunct_to_flat[VEMU_MAX_FUNCT3] = {
+    [VEMU_FUNCT_LB]             = VEMU_OPCODE_LB,
+    [VEMU_FUNCT_LH]             = VEMU_OPCODE_LH,
+    [VEMU_FUNCT_LW]             = VEMU_OPCODE_LW,
+    [VEMU_FUNCT_LBU]            = VEMU_OPCODE_LBU,
+    [VEMU_FUNCT_LHU]            = VEMU_OPCODE_LHU,
+};
+
+static vemu_opcode_t const vemu_sfunct_to_flat[VEMU_MAX_FUNCT3] = {
+    [VEMU_FUNCT_SB]             = VEMU_OPCODE_SB,
+    [VEMU_FUNCT_SH]             = VEMU_OPCODE_SH,
+    [VEMU_FUNCT_SW]             = VEMU_OPCODE_SW
+};
+
 static char const *vemu_opcode_names[VEMU_MAX_OPCODES] = {
+    [VEMU_OPCODE_ILLEGAL]       = "illegal",
     [VEMU_OPCODE_ADDI]          = "addi",
-    [VEMU_OPCODE_SW]            = "sw",
-    [VEMU_OPCODE_LI]            = "li"
+    [VEMU_OPCODE_LI]            = "li",
+    [VEMU_OPCODE_LB]            = "lb",
+    [VEMU_OPCODE_LH]            = "lh",
+    [VEMU_OPCODE_LW]            = "lw",
+    [VEMU_OPCODE_LBU]           = "lbu",
+    [VEMU_OPCODE_LHU]           = "lhu",
+    [VEMU_OPCODE_SB]            = "sb",
+    [VEMU_OPCODE_SH]            = "sh",
+    [VEMU_OPCODE_SW]            = "sw"
 };
 
 static inline uint32_t vemu_sext(uint32_t value, uint32_t bits) {
@@ -59,7 +81,7 @@ static inline uint32_t vemu_sext(uint32_t value, uint32_t bits) {
 
 void vemu_decode_format_cr(uint32_t instr, vemu_decoded_t *dec, 
                                   vemu_compressed_opcode_t copcode) {
-    dec->opcode = vemu_compressed_to_regular[copcode];
+    dec->opcode = vemu_compressed_to_flat[copcode];
     VEMU_ASSERT(dec->opcode != 0);
 
     dec->rd = dec->rs1 = (instr >> 7) & 0x1F;
@@ -69,7 +91,7 @@ void vemu_decode_format_cr(uint32_t instr, vemu_decoded_t *dec,
 
 static void vemu_decode_format_ci(uint32_t instr, vemu_decoded_t *dec,
                                   vemu_compressed_opcode_t copcode) {
-    dec->opcode = vemu_compressed_to_regular[copcode];
+    dec->opcode = vemu_compressed_to_flat[copcode];
     VEMU_ASSERT(dec->opcode != 0);
 
     dec->rd = dec->rs1 = (instr >> 7) & 0x1F;
@@ -80,7 +102,7 @@ static void vemu_decode_format_ci(uint32_t instr, vemu_decoded_t *dec,
 
 static void vemu_decode_format_css(uint32_t instr, vemu_decoded_t *dec,
                                    vemu_compressed_opcode_t copcode) {
-    dec->opcode = vemu_compressed_to_regular[copcode];
+    dec->opcode = vemu_compressed_to_flat[copcode];
     VEMU_ASSERT(dec->opcode != 0);
 
     dec->rd = dec->rs1 = 0;
@@ -96,7 +118,7 @@ static void vemu_decode_format_css(uint32_t instr, vemu_decoded_t *dec,
 
 static void vemu_decode_format_ciw(uint32_t instr, vemu_decoded_t *dec,
                                    vemu_compressed_opcode_t copcode) {
-    dec->opcode = vemu_compressed_to_regular[copcode];
+    dec->opcode = vemu_compressed_to_flat[copcode];
     VEMU_ASSERT(dec->opcode != 0);
 
     dec->rd = 8 + ((instr >> 2) & 0xF);
@@ -170,10 +192,55 @@ static void vemu_decode_compressed(uint32_t instr, vemu_decoded_t *dec) {
     }
 }
 
+static void vemu_decode_format_i(uint32_t instr, vemu_decoded_t *dec, 
+                                 vemu_regular_opcode_t ropcode) {
+    uint32_t funct = (instr >> 12) & 0x7;
+    switch (ropcode) {
+        case VEMU_OPCODE_R_L:
+            dec->opcode = vemu_lfunct_to_flat[funct];
+            break;
+
+        default:
+            VEMU_UNREACHED();
+    }
+    VEMU_ASSERT(dec->opcode != 0);      
+
+    dec->rd = ((instr) >> 7) & 0x1F;
+    dec->rs1 = (instr >> 15) & 0x1F;
+    dec->rs2 = 0;
+    dec->imm = vemu_sext((instr >> 20) & 0xFFF, 12);
+}
+
+static void vemu_decode_format_s(uint32_t instr, vemu_decoded_t *dec,
+                                 vemu_regular_opcode_t ropcode) {
+    VEMU_ASSERT(ropcode == VEMU_OPCODE_R_S);
+    
+    uint32_t funct = (instr >> 12) & 0x7;
+    dec->opcode = vemu_sfunct_to_flat[funct];
+    VEMU_ASSERT(dec->opcode != 0);      
+
+    dec->rd = 0;
+    dec->rs1 = (instr >> 15) & 0x1F;
+    dec->rs2 = (instr >> 20) & 0x1F;
+    dec->imm = vemu_sext(((instr >> 7) & 0x1F)
+                         | (((instr >> 25)) << 5), 12);
+}
+
 static void vemu_decode_regular(uint32_t instr, vemu_decoded_t *dec) {
     dec->opcode = dec->rd = dec->rs1 = dec->rs2 = dec->imm = 0;
 
-    (void)instr;
+    switch (instr & 0x7F) {
+        case VEMU_OPCODE_R_L:
+            vemu_decode_format_i(instr, dec, VEMU_OPCODE_R_L);
+            break;
+
+        case VEMU_OPCODE_R_S:
+            vemu_decode_format_s(instr, dec, VEMU_OPCODE_R_S);
+            break;
+
+        default:
+            VEMU_UNREACHED();
+    }
 }
 
 void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram) {
@@ -202,7 +269,7 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
     
             fprintf(stderr, "    %04x ", instr);
         } else {
-            instr = (instr << 16) | vemu_ram_load_half(*cpu->ram, cpu->ip + 2);
+            instr = instr | (vemu_ram_load_half(*cpu->ram, cpu->ip + 2) << 16);
             vemu_decode_regular(instr, &dec);
 
             cpu->ip += 4;
@@ -210,14 +277,13 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
             fprintf(stderr, "%08x ", instr);
         }
     
-        char const *name = vemu_opcode_names[dec.opcode];
-        if (name == NULL) {
-            name = "(illegal)";
-            terminated = true;
-        }
-    
+        char const *name = vemu_opcode_names[dec.opcode];    
         fprintf(stderr, "%s rd=%s rs1=%s rs2=%s imm=%d\n", 
                 name, vemu_reg_names[dec.rd], vemu_reg_names[dec.rs1], 
                 vemu_reg_names[dec.rs2], dec.imm);
+
+        if (dec.opcode == VEMU_OPCODE_ILLEGAL) {
+            terminated = true;
+        }
     }
 }
