@@ -11,6 +11,7 @@
 
 typedef enum {
     VEMU_OPCODE_ILLEGAL,
+    VEMU_OPCODE_ADD,
     VEMU_OPCODE_ADDI,
     VEMU_OPCODE_LI,
     VEMU_OPCODE_LB,
@@ -40,6 +41,8 @@ typedef enum {
     VEMU_OPCODE_C_ADDI,
     VEMU_OPCODE_C_LI,
     VEMU_OPCODE_C_SWSP,
+    VEMU_OPCODE_C_ADD,
+    VEMU_OPCODE_C_MV,
 } vemu_compressed_opcode_t;
 
 typedef enum {
@@ -48,6 +51,15 @@ typedef enum {
     VEMU_OPCODE_R_L         = 0x03,
     VEMU_OPCODE_R_S         = 0x23,
 } vemu_regular_opcode_t;
+
+typedef enum {
+    VEMU_INSTRFORMAT_R,
+    VEMU_INSTRFORMAT_I,
+    VEMU_INSTRFORMAT_S,
+    VEMU_INSTRFORMAT_B,
+    VEMU_INSTRFORMAT_U,
+    VEMU_INSTRFORMAT_J,
+} vemu_instruction_format_t;
 
 typedef struct {
     uint32_t regs[VEMU_N_REGS];
@@ -63,6 +75,8 @@ typedef struct {
     uint8_t rs2;
     uint32_t imm;
 } vemu_decoded_t;
+
+void vemu_disassemble(vemu_decoded_t *dec);
 
 void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram);
 

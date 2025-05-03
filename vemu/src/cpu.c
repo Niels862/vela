@@ -44,6 +44,8 @@ static vemu_opcode_t const vemu_compressed_to_flat[VEMU_MAX_OPCODES] = {
     [VEMU_OPCODE_C_ADDI4SPN]    = VEMU_OPCODE_ADDI,
     [VEMU_OPCODE_C_ADDI]        = VEMU_OPCODE_ADDI,
     [VEMU_OPCODE_C_LI]          = VEMU_OPCODE_LI,
+    [VEMU_OPCODE_C_ADD]         = VEMU_OPCODE_ADD,
+    [VEMU_OPCODE_C_MV]          = VEMU_OPCODE_ADD,
     [VEMU_OPCODE_C_SWSP]        = VEMU_OPCODE_SW,
 };
 
@@ -63,6 +65,7 @@ static vemu_opcode_t const vemu_sfunct_to_flat[VEMU_MAX_FUNCT3] = {
 
 static char const *vemu_opcode_names[VEMU_MAX_OPCODES] = {
     [VEMU_OPCODE_ILLEGAL]       = "illegal",
+    [VEMU_OPCODE_ADD]           = "add",
     [VEMU_OPCODE_ADDI]          = "addi",
     [VEMU_OPCODE_LI]            = "li",
     [VEMU_OPCODE_LB]            = "lb",
@@ -79,14 +82,33 @@ static inline uint32_t vemu_sext(uint32_t value, uint32_t bits) {
     return (int32_t)(value << (32 - bits)) >> (32 - bits);
 }
 
-void vemu_decode_format_cr(uint32_t instr, vemu_decoded_t *dec, 
+static void vemu_decode_format_cr(uint32_t instr, vemu_decoded_t *dec, 
                                   vemu_compressed_opcode_t copcode) {
-    dec->opcode = vemu_compressed_to_flat[copcode];
-    VEMU_ASSERT(dec->opcode != 0);
-
-    dec->rd = dec->rs1 = (instr >> 7) & 0x1F;
-    dec->rs2 = (instr >> 2) & 0x1F;
+    dec->rd = (instr >> 7) & 0x1F;
+    dec->rs1 = dec->rs2 = (instr >> 2) & 0x1F;
     dec->imm = 0;
+
+    switch (copcode) {
+        case VEMU_OPCODE_C_ADD:
+            if (dec->rs2 == 0) {
+                // ebreak / jalr
+            } else {
+                dec->opcode = VEMU_OPCODE_ADD;
+            }
+            break;
+
+        case VEMU_OPCODE_C_MV:
+            if (dec->rs2 == 0) {
+                // jr
+            } else {
+                dec->opcode = VEMU_OPCODE_ADD;
+                dec->rs1 = 0;
+            }
+            break;
+        
+        default:
+            VEMU_UNREACHED();
+    }
 }
 
 static void vemu_decode_format_ci(uint32_t instr, vemu_decoded_t *dec,
@@ -105,7 +127,8 @@ static void vemu_decode_format_css(uint32_t instr, vemu_decoded_t *dec,
     dec->opcode = vemu_compressed_to_flat[copcode];
     VEMU_ASSERT(dec->opcode != 0);
 
-    dec->rd = dec->rs1 = 0;
+    dec->rd = 0;
+    dec->rs1 = 2;
     dec->rs2 = (instr >> 2) & 0x1F;
 
     if (copcode == VEMU_OPCODE_C_SWSP) {
@@ -162,6 +185,14 @@ static void vemu_decode_compressed_q1(uint32_t instr, vemu_decoded_t *dec) {
 
 static void vemu_decode_compressed_q2(uint32_t instr, vemu_decoded_t *dec) {
     switch ((instr >> 13) & 0x7) {
+        case 0x4:
+            if (((instr >> 12) & 0x1) == 0x1) {
+                vemu_decode_format_cr(instr, dec, VEMU_OPCODE_C_ADD);
+            } else {
+                vemu_decode_format_cr(instr, dec, VEMU_OPCODE_C_MV);
+            }
+            break;
+
         case 0x6:
             vemu_decode_format_css(instr, dec, VEMU_OPCODE_C_SWSP);
             break;
@@ -211,6 +242,10 @@ static void vemu_decode_format_i(uint32_t instr, vemu_decoded_t *dec,
     dec->imm = vemu_sext((instr >> 20) & 0xFFF, 12);
 }
 
+//fec42703
+// 1111 1110 1100 0100  0010 0111 0000 0011
+// 
+
 static void vemu_decode_format_s(uint32_t instr, vemu_decoded_t *dec,
                                  vemu_regular_opcode_t ropcode) {
     VEMU_ASSERT(ropcode == VEMU_OPCODE_R_S);
@@ -243,6 +278,61 @@ static void vemu_decode_regular(uint32_t instr, vemu_decoded_t *dec) {
     }
 }
 
+static vemu_instruction_format_t vemu_opcode_to_format(vemu_opcode_t opcode) {
+    switch (opcode) {
+        case VEMU_OPCODE_ADD:
+            return VEMU_INSTRFORMAT_R;
+
+        case VEMU_OPCODE_ADDI:
+        case VEMU_OPCODE_LI:
+        case VEMU_OPCODE_LB:
+        case VEMU_OPCODE_LH:
+        case VEMU_OPCODE_LW:
+        case VEMU_OPCODE_LBU:
+        case VEMU_OPCODE_LHU:
+            return VEMU_INSTRFORMAT_I;
+
+        case VEMU_OPCODE_SB:
+        case VEMU_OPCODE_SH:
+        case VEMU_OPCODE_SW:
+            return VEMU_INSTRFORMAT_S;
+
+        case VEMU_OPCODE_ILLEGAL:
+            break;
+    }
+
+    VEMU_UNREACHED();
+}
+
+void vemu_disassemble(vemu_decoded_t *dec) {
+    vemu_instruction_format_t format = vemu_opcode_to_format(dec->opcode);
+
+    char const *opcode = vemu_opcode_names[dec->opcode];
+    char const *rd = vemu_reg_names[dec->rd];
+    char const *rs1 = vemu_reg_names[dec->rs1];
+    char const *rs2 = vemu_reg_names[dec->rs2];
+
+    switch (format) {
+        case VEMU_INSTRFORMAT_R:
+            fprintf(stderr, "%s %s,%s,%s\n", opcode, rd, rs1, rs2);
+            break;
+
+        case VEMU_INSTRFORMAT_I:
+            fprintf(stderr, "%s %s,%s,%d\n", opcode, rd, rs1, dec->imm);
+            break;
+
+        case VEMU_INSTRFORMAT_S:
+            fprintf(stderr, "%s %s,%d(%s)\n", opcode, rs2, dec->imm, rs1);
+            break;
+
+        case VEMU_INSTRFORMAT_B:
+        case VEMU_INSTRFORMAT_U:
+        case VEMU_INSTRFORMAT_J:
+            fprintf(stderr, "todo\n");
+            break;
+    }
+}
+
 void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram) {
     for (size_t i = 0; i < VEMU_N_REGS; i++) {
         cpu->regs[i] = 0;
@@ -267,21 +357,18 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
 
             cpu->ip += 2;
     
-            fprintf(stderr, "    %04x ", instr);
+            fprintf(stderr, "    %04x    ", instr);
         } else {
             instr = instr | (vemu_ram_load_half(*cpu->ram, cpu->ip + 2) << 16);
             vemu_decode_regular(instr, &dec);
 
             cpu->ip += 4;
     
-            fprintf(stderr, "%08x ", instr);
+            fprintf(stderr, "%08x    ", instr);
         }
     
-        char const *name = vemu_opcode_names[dec.opcode];    
-        fprintf(stderr, "%s rd=%s rs1=%s rs2=%s imm=%d\n", 
-                name, vemu_reg_names[dec.rd], vemu_reg_names[dec.rs1], 
-                vemu_reg_names[dec.rs2], dec.imm);
-
+        vemu_disassemble(&dec);
+        
         if (dec.opcode == VEMU_OPCODE_ILLEGAL) {
             terminated = true;
         }
