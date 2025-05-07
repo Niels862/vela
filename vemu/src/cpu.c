@@ -401,6 +401,8 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
             vemu_disassemble(&dec);
         }
 
+        cpu->regs[VEMU_ZERO] = 0;
+
         uint32_t addr, value;
         switch (dec.opcode) {
             case VEMU_OPCODE_ILLEGAL:
@@ -461,6 +463,9 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
                 break;
 
             case VEMU_OPCODE_JALR:
+                value = cpu->ip;
+                cpu->ip = cpu->regs[dec.rs1] + dec.imm;
+                cpu->regs[dec.rd] = value;
                 break;
 
             case VEMU_OPCODE_ECALL:

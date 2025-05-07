@@ -1,6 +1,6 @@
 TARGET = vemu
 CC = gcc
-INC_DIR = inc
+INC_DIR = inc ../common
 SRC_DIR = src
 
 CFLAGS = -Wall -Wextra -Wpedantic -Werror -Wfatal-errors -std=c99 -O3 -g
