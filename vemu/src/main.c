@@ -54,10 +54,13 @@ int main(int argc, char **argv) {
     vemu_system_t sys;
     vemu_system_init(&sys);
 
-    uint8_t *ram = malloc(1024 * 1024 * 1024);
+    size_t ram_size = 1024 * 1024 * 1024;
+
+    uint8_t *ram = malloc(ram_size);
     if (ram == NULL) {
         return 1;
     }
+    memset(ram, 0, ram_size);
 
     vemu_system_add_ram(&sys, ram);
 

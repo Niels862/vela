@@ -1,7 +1,7 @@
 #include "ecalls.h"
 
 int _start() {
-    iprint(42);
+    PRINT_INT(42);
 
     return 0;
 }
