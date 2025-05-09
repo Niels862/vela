@@ -1,5 +1,5 @@
 CC = riscv32-unknown-elf-gcc
-CFLAGS = -Wall -O0 -nostdlib -nostartfiles -march=rv32imafdc -mabi=ilp32f
+CFLAGS = -Wall -O0 -nostdlib -nostartfiles -march=rv32imafd -mabi=ilp32f
 LDFLAGS =
 LD_SCRIPT =
 
