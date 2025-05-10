@@ -1,3 +1,5 @@
+#include "ecalls.h"
+
 int _start() {
     int arr[64];
 
@@ -10,5 +12,7 @@ int _start() {
         sum += arr[i];
     }
 
-    return sum;
+    PRINT_INT(sum);
+
+    return 0;
 }

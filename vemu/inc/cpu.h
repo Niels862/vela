@@ -145,7 +145,7 @@ typedef struct {
     uint32_t imm;
 } vemu_decoded_t;
 
-void vemu_disassemble(vemu_decoded_t *dec);
+void vemu_disassemble(vemu_decoded_t *dec, uint32_t ip);
 
 void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram);
 
