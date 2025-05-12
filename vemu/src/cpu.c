@@ -1,5 +1,6 @@
 #include "cpu.h"
 #include "ram.h"
+#include "ecall-codes.h"
 #include "util.h"
 #include <stdio.h>
 #include <stddef.h>
@@ -578,13 +579,26 @@ static vemu_instruction_format_t vemu_opcode_to_format(vemu_opcode_t opcode) {
     VEMU_UNREACHED();
 }
 
-void vemu_disassemble(vemu_decoded_t *dec, uint32_t ip) {
-    vemu_instruction_format_t format = vemu_opcode_to_format(dec->opcode);
-
+void vemu_disassemble(vemu_decoded_t *dec, uint32_t instr, uint32_t ip) {
     char const *opcode = vemu_opcode_names[dec->opcode];
     char const *rd = vemu_register_name(dec->rd);
     char const *rs1 = vemu_register_name(dec->rs1);
     char const *rs2 = vemu_register_name(dec->rs2);
+
+    fprintf(stderr, "%8x: ", ip);
+
+    if (dec->c) {
+        fprintf(stderr, "    %04x    ", instr);
+    } else {
+        fprintf(stderr, "%08x    ", instr);
+    }
+
+    if (dec->opcode == VEMU_OPCODE_ILLEGAL) {
+        fprintf(stderr, "illegal instruction\n");
+        return;
+    }
+
+    vemu_instruction_format_t format = vemu_opcode_to_format(dec->opcode);
 
     switch (format) {
         case VEMU_FORMAT_R:
@@ -624,6 +638,11 @@ void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram) {
 
 #define EXEC_FUNC(op) \
         static inline void vemu_exec_##op(vemu_cpu_t *cpu, vemu_decoded_t *dec)
+
+EXEC_FUNC(ILLEGAL) {
+    (void)dec;
+    cpu->terminated = true;
+}
 
 EXEC_FUNC(NOP) {
     (void)cpu, (void)dec;
@@ -727,62 +746,172 @@ EXEC_FUNC(SW) {
     vemu_ram_store_word(*cpu->ram, addr, cpu->regs[dec->rs2]);
 }
 
+EXEC_FUNC(ADDI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] + dec->imm;
+}
+
+EXEC_FUNC(SLTI) {
+    cpu->regs[dec->rd] = (int32_t)cpu->regs[dec->rs1] < (int32_t)dec->imm;
+}
+
+EXEC_FUNC(SLTIU) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] < dec->imm;
+}
+
+EXEC_FUNC(XORI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] ^ dec->imm;
+}
+
+EXEC_FUNC(ORI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] | dec->imm;
+}
+
+EXEC_FUNC(ANDI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] & dec->imm;
+}
+
+EXEC_FUNC(SRLI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] >> dec->imm;
+}
+
+EXEC_FUNC(SLLI) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] << dec->imm;
+}
+
+EXEC_FUNC(SRAI) {
+    cpu->regs[dec->rd] = (int32_t)cpu->regs[dec->rs1] >> dec->imm;
+}
+
+EXEC_FUNC(ADD) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] + cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(SUB) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] - cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(SLL) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] >> cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(SLT) {
+    int32_t x = cpu->regs[dec->rs1], y = cpu->regs[dec->rs2];
+    cpu->regs[dec->rd] = x < y;
+}
+
+EXEC_FUNC(SLTU) {
+    uint32_t shamt = cpu->regs[dec->rs2] & 0x1F;
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] < shamt;
+}
+
+EXEC_FUNC(XOR) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] ^ cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(SRL) {
+    uint32_t shamt = cpu->regs[dec->rs2] & 0x1F;
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] >> shamt;
+}
+
+EXEC_FUNC(SRA) {
+    uint32_t shamt = cpu->regs[dec->rs2] & 0x1F;
+    cpu->regs[dec->rd] = (int32_t)cpu->regs[dec->rs1] >> shamt;
+}
+
+EXEC_FUNC(OR) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] | cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(AND) {
+    cpu->regs[dec->rd] = cpu->regs[dec->rs1] & cpu->regs[dec->rs2];
+}
+
+EXEC_FUNC(FENCE) {
+    (void)cpu, (void)dec;
+}
+
+EXEC_FUNC(FENCE_TSO) {
+    (void)cpu, (void)dec;
+}
+
+EXEC_FUNC(PAUSE) {
+    (void)cpu, (void)dec;
+}
+
+EXEC_FUNC(ECALL) {
+    (void)dec;
+
+    uint32_t res = 0;
+
+    switch (cpu->regs[VEMU_A7]) {
+        case VEMU_ECALL_PRINT_INT:
+            fprintf(stderr, ">> %d\n", cpu->regs[VEMU_A0]);
+            break;
+
+        case VEMU_ECALL_START_TRACE:
+            cpu->trace = 0;
+            break;
+
+        case VEMU_ECALL_TRACE_RESULT:
+            res = cpu->trace;
+            break;
+
+        case VEMU_ECALL_TEST_ASSERT: {
+            uint32_t x = cpu->regs[VEMU_A1], y = cpu->regs[VEMU_A2];
+            if (x != y) {
+                fprintf(stderr, "line %d: assertion failed: %d != %d\n", 
+                        cpu->regs[VEMU_A0], x, y);
+            }
+            break;
+        }
+
+        default:
+            fprintf(stderr, "unsupported ecall: %d\n", 
+                    cpu->regs[VEMU_A7]);
+            cpu->terminated = true;
+            break;
+    }
+
+    cpu->regs[VEMU_A0] = res;
+}
+
+EXEC_FUNC(EBREAK) {
+    (void)cpu, (void)dec;
+}
+
 #define DISPATCH(op) case VEMU_OPCODE_##op: vemu_exec_##op(cpu, &dec); break;
+
+static void vemu_fetch_and_decode(vemu_cpu_t *cpu, vemu_decoded_t *dec) {
+    uint32_t instr = vemu_ram_load_half(*cpu->ram, cpu->ip);
+    
+    if (VEMU_IS_COMPRESSED(instr)) {
+        vemu_decode_compressed(instr, dec);
+
+        cpu->next_ip = cpu->ip + 2;
+    } else {
+        instr = instr | (vemu_ram_load_half(*cpu->ram, cpu->ip + 2) << 16);
+        vemu_decode_regular(instr, dec);
+
+        cpu->next_ip = cpu->ip + 4;
+    }
+
+    if (0) {
+        vemu_disassemble(dec, instr, cpu->ip);
+    }
+}
 
 void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
     cpu->ip = entry;
     cpu->regs[2] = 0x20000;
 
-    bool terminated = false;
-
-    uint32_t trace = 0;
-
-    int32_t sx, sy, res;
-
-    while (!terminated) {
-        uint32_t instr = vemu_ram_load_half(*cpu->ram, cpu->ip);
-        if (instr == 0x0) {
-            return;
-        }
-
-        if (0) {
-            fprintf(stderr, "%8x: ", cpu->ip);
-        }
-
-        vemu_decoded_t dec = { 0 };
-        if (VEMU_IS_COMPRESSED(instr)) {
-            vemu_decode_compressed(instr, &dec);
-
-            cpu->next_ip = cpu->ip + 2;
-    
-            if (0) {
-                fprintf(stderr, "    %04x    ", instr);
-            }
-        } else {
-            instr = instr | (vemu_ram_load_half(*cpu->ram, cpu->ip + 2) << 16);
-            vemu_decode_regular(instr, &dec);
-
-            cpu->next_ip = cpu->ip + 4;
-    
-            if (0) {
-                fprintf(stderr, "%08x    ", instr);
-            }
-        }
-            
-        if (0) {
-            if (dec.opcode == VEMU_OPCODE_ILLEGAL) {
-                fprintf(stderr, "illegal instruction\n");
-            } else {
-                vemu_disassemble(&dec, cpu->ip);
-            }
-        }
-
+    while (!cpu->terminated) {
         cpu->regs[VEMU_ZERO] = 0;
 
-        switch (dec.opcode) {
-            case VEMU_OPCODE_ILLEGAL:
-                break;
+        vemu_decoded_t dec = { 0, };
+        vemu_fetch_and_decode(cpu, &dec);
 
+        switch (dec.opcode) {
+            DISPATCH(ILLEGAL)
             DISPATCH(NOP)
             DISPATCH(LUI);
             DISPATCH(AUIPC);
@@ -793,6 +922,7 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
             DISPATCH(BLT)
             DISPATCH(BGE)
             DISPATCH(BLTU)
+            DISPATCH(BGEU)
             DISPATCH(LB)
             DISPATCH(LH)
             DISPATCH(LW)
@@ -801,127 +931,33 @@ void vemu_cpu_run(vemu_cpu_t *cpu, uint32_t entry) {
             DISPATCH(SB)
             DISPATCH(SH)
             DISPATCH(SW)
-
-            case VEMU_OPCODE_ADDI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] + dec.imm;
-                break;
-
-            case VEMU_OPCODE_SLTI:
-                sx = cpu->regs[dec.rs1];
-                sy = dec.imm;
-                cpu->regs[dec.rd] = sx < sy;
-                break;
-
-            case VEMU_OPCODE_SLTIU:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] < dec.imm;
-                break;
-
-            case VEMU_OPCODE_XORI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] ^ dec.imm;
-                break;
-                
-            case VEMU_OPCODE_ORI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] | dec.imm;
-                break;
-
-            case VEMU_OPCODE_ANDI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] & dec.imm;
-                break;
-
-            case VEMU_OPCODE_SRLI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] >> dec.imm;
-                break;
-
-            case VEMU_OPCODE_SLLI:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] << dec.imm;
-                break;
-
-            case VEMU_OPCODE_SRAI:
-                sx = cpu->regs[dec.rs1];
-                cpu->regs[dec.rd] = sx >> dec.imm;
-                break;
-
-            case VEMU_OPCODE_ADD:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] + cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_SUB:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] - cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_SLL:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] << cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_SLT:
-                sx = cpu->regs[dec.rs1];
-                sy = cpu->regs[dec.rs2];
-                cpu->regs[dec.rd] = sx < sy;
-                break;
-
-            case VEMU_OPCODE_SLTU:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] < cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_XOR:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] ^ cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_SRL:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] >> cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_SRA:
-                sx = cpu->regs[dec.rs1];
-                cpu->regs[dec.rd] = sx >> cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_OR:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] | cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_AND:
-                cpu->regs[dec.rd] = cpu->regs[dec.rs1] & cpu->regs[dec.rs2];
-                break;
-
-            case VEMU_OPCODE_FENCE:
-            case VEMU_OPCODE_FENCE_TSO:
-            case VEMU_OPCODE_PAUSE:
-                // todo
-                break;
-
-            case VEMU_OPCODE_ECALL:
-                res = 0;
-
-                switch (cpu->regs[VEMU_A7]) {
-                    case 0:
-                        fprintf(stderr, ">> %d\n", cpu->regs[VEMU_A0]);
-                        break;
-
-                    case 1:
-                        trace = 0;
-                        break;
-
-                    case 2:
-                        res = trace;
-                        break;
-
-                    default:
-                        fprintf(stderr, "unsupported ecall: %d\n", 
-                                cpu->regs[VEMU_A7]);
-                        terminated = true;
-                        break;
-                }
-
-                cpu->regs[VEMU_A0] = res;
-                break;
-
-            case VEMU_OPCODE_EBREAK:
-                // todo
-                break;
+            DISPATCH(ADDI)
+            DISPATCH(SLTI)
+            DISPATCH(SLTIU)
+            DISPATCH(XORI)
+            DISPATCH(ORI)
+            DISPATCH(ANDI)
+            DISPATCH(SRLI)
+            DISPATCH(SLLI)
+            DISPATCH(SRAI)
+            DISPATCH(ADD)
+            DISPATCH(SUB)
+            DISPATCH(SLL)
+            DISPATCH(SLT)
+            DISPATCH(SLTU)
+            DISPATCH(XOR)
+            DISPATCH(SRL)
+            DISPATCH(SRA)
+            DISPATCH(OR)
+            DISPATCH(AND)
+            DISPATCH(FENCE)
+            DISPATCH(FENCE_TSO)
+            DISPATCH(PAUSE)
+            DISPATCH(ECALL)
+            DISPATCH(EBREAK)
         }
 
         cpu->ip = cpu->next_ip;
-        trace++;
+        cpu->trace++;
     }
 }

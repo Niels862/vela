@@ -2,7 +2,8 @@
 #define VEMU_CPU_H
 
 #include "registers.h"
-#include <inttypes.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define VEMU_MAX_OPCODES    128
 #define VEMU_MAX_FUNCT3     8
@@ -135,18 +136,23 @@ typedef struct {
     uint32_t ip;
     uint32_t next_ip;
 
+    bool terminated;
+
+    uint32_t trace;
+
     uint8_t **ram;
 } vemu_cpu_t;
 
 typedef struct {
-    uint8_t opcode;
+    vemu_opcode_t opcode;
     uint8_t rd;
     uint8_t rs1;
     uint8_t rs2;
     uint32_t imm;
+    bool c;
 } vemu_decoded_t;
 
-void vemu_disassemble(vemu_decoded_t *dec, uint32_t ip);
+void vemu_disassemble(vemu_decoded_t *dec, uint32_t instr, uint32_t ip);
 
 void vemu_cpu_init(vemu_cpu_t *cpu, uint8_t **ram);
 

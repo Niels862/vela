@@ -1,0 +1,11 @@
+#ifndef VEMU_COMMON_ECALL_CODES_H
+#define VEMU_COMMON_ECALL_CODES_H
+
+typedef enum {
+    VEMU_ECALL_PRINT_INT,
+    VEMU_ECALL_START_TRACE,
+    VEMU_ECALL_TRACE_RESULT,
+    VEMU_ECALL_TEST_ASSERT,
+} vemu_ecall_t;
+
+#endif
