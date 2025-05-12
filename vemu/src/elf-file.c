@@ -126,14 +126,15 @@ bool vemu_read_program_header(FILE *file, vemu_elf_header_t *elf,
 bool vemu_load_program(FILE *file, vemu_elf_program_header_t *ph,
                        uint8_t *ram) {
     assert(ph->p_type == ELF_PT_LOAD);
-    assert(ph->p_filesz != 0);
     assert(ph->p_filesz <= ph->p_memsz);
 
-    fseek(file, ph->p_offset, SEEK_SET);
+    if (ph->p_filesz > 0) {
+        fseek(file, ph->p_offset, SEEK_SET);
 
-    size_t size = fread(ram + ph->p_vaddr, 1, ph->p_filesz, file);
-    if (size < ph->p_filesz) {
-        return false;
+        size_t size = fread(ram + ph->p_vaddr, 1, ph->p_filesz, file);
+        if (size < ph->p_filesz) {
+            return false;
+        }
     }
 
     if (ph->p_memsz > ph->p_filesz) {

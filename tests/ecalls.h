@@ -1,7 +1,9 @@
 /* Will be moved later */
 
 enum ecall {
-    ECALL_PRINT_INT
+    ECALL_PRINT_INT,
+    ECALL_START_TRACE,
+    ECALL_TRACE_RESULT
 };
 
 #define ECALL0(ecall)                           \
@@ -34,4 +36,17 @@ enum ecall {
                      : "memory");               \
     } while (0)
 
+#define ECALL0_RET(ecall, result)               \
+    do {                                        \
+        register int a7 asm("a7") = (ecall);    \
+        register int a0 asm("a0");              \
+        asm volatile("ecall"                    \
+                        : "=r"(a0)              \
+                        : "r"(a7)               \
+                        : "memory");            \
+        (result) = a0;                          \
+    } while (0)
+
 #define PRINT_INT(i) ECALL1(ECALL_PRINT_INT, (i))
+#define START_TRACE() ECALL0(ECALL_START_TRACE)
+#define TRACE_RESULT(res) ECALL0_RET(ECALL_TRACE_RESULT, res)

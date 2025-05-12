@@ -133,6 +133,7 @@ typedef enum {
 typedef struct {
     uint32_t regs[VEMU_N_REGS];
     uint32_t ip;
+    uint32_t next_ip;
 
     uint8_t **ram;
 } vemu_cpu_t;
