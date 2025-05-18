@@ -55,6 +55,7 @@ do {                                                \
     } while (0)
 
 #define PRINT_INT(i)            ECALL1(VEMU_ECALL_PRINT_INT, (i))
+#define PRINT_CHAR(c)           ECALL1(VEMU_ECALL_PRINT_CHAR, (c))
 #define START_TRACE()           ECALL0(VEMU_ECALL_START_TRACE)
 #define TRACE_RESULT(res)       ECALL0_RET(VEMU_ECALL_TRACE_RESULT, res)
 #define TEST_ASSERT(x, y)       ECALL3(VEMU_ECALL_TEST_ASSERT, __LINE__, x, y)

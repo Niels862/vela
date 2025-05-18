@@ -2,4 +2,5 @@ vemu/vemu
 vela/vela
 *.o
 *.d
+*.a
 *.elf

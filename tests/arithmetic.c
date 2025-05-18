@@ -15,6 +15,8 @@ int _start() {
     TEST_ASSERT(min & 0, 0);
 
     for (int i = -10; i <= 10; i++) {
+        TEST_ASSERT(0 * i, 0);
+        TEST_ASSERT(1 * i, i);
         TEST_ASSERT(i << 1, 2 * i);
         TEST_ASSERT(i << 2, 4 * i);
     }

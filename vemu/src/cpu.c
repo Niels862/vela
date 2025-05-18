@@ -845,7 +845,11 @@ EXEC_FUNC(ECALL) {
 
     switch (cpu->regs[VEMU_A7]) {
         case VEMU_ECALL_PRINT_INT:
-            fprintf(stderr, ">> %d\n", cpu->regs[VEMU_A0]);
+            printf(">> %d\n", cpu->regs[VEMU_A0]);
+            break;
+
+        case VEMU_ECALL_PRINT_CHAR:
+            printf("%c", cpu->regs[VEMU_A0]);
             break;
 
         case VEMU_ECALL_START_TRACE:
