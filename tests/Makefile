@@ -1,7 +1,7 @@
 CC = riscv32-unknown-elf-gcc
 INC_DIR = ../common/inc
 
-CFLAGS = -ffreestanding -nostdinc -nostdlib -nostartfiles -isystem ../libc/inc -I../common/inc -Wall -Wextra -Wpedantic -O0 -march=rv32imafd -mabi=ilp32f
+CFLAGS = -ffreestanding -nostdinc -nostdlib -nostartfiles -isystem ../libc/inc -I../common/inc -Wall -Wextra -Wpedantic -O3 -march=rv32imafd -mabi=ilp32f
 LIBFLAGS = -L../libc -lstd
 LDFLAGS =
 LD_SCRIPT =
